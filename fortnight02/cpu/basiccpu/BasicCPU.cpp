@@ -117,6 +117,11 @@ int BasicCPU::ID()
 			break;
 		// case TODO
 		// x101 Data Processing -- Register on page C4-278
+		case 0x0A000000:
+		case 0x1A000000:
+			fpOP = false;
+			return decodeDataProcReg();
+			break;
 		default:
 			return 1; // instrução não implementada
 	}
@@ -221,7 +226,28 @@ int BasicCPU::decodeLoadStore() {
  *		   1: se a instrução não estiver implementada.
  */
 int BasicCPU::decodeDataProcReg() {
-	// TODO
+	unsigned int n, d, m;
+  
+  switch(IR & 0xFF200000){
+    case 0x0B000000:
+    case 0X8B000000:
+	m = (IR & 0x001F0000) >> 16;
+    B = getX(m);
+
+    n = (IR & 0x000003E0) >> 5;
+    A = getX(n);
+
+    d = (IR & 0x0000001F);
+    Rd = &(R[d]);
+	MEMctrl = MEMctrlFlag::MEM_NONE;
+    ALUctrl = ALUctrlFlag::SUB;
+    WBctrl = WBctrlFlag::RegWrite;
+    MemtoReg = false;
+    return 0;
+
+    default:
+      return 1;
+  }
 	//		acrescentar um switch no estilo do switch de decodeDataProcImm,
 	//		e implementar APENAS PARA A INSTRUÇÃO A SEGUIR:
 	//				'add w1, w1, w0'
