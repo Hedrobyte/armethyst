@@ -1,6 +1,7 @@
 /obj/*.o
 /armethyst
-/elf_isummation.o.txt
 /runtest
+/elf_isummation.o.txt
 /saida.txt
 /txt_isummation.o.txt
+/cacheLog.txt

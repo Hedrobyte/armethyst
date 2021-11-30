@@ -36,7 +36,9 @@
 #include "config.h"
 #include "Util.h"
 
-#include "BasicMemoryTest.h"
+#include "Factory.h"
+#include "MemoryTest.h"
+#include "MemoryLoader.h"
 #include "BasicCPUTest.h"
 
 #include <iostream>
@@ -54,16 +56,17 @@ using namespace std;
 
 #define RESETTEST()	fpOp=false;startAddress=-1;xpctdIR=-1;xpctdA=-1;xpctdB=-1;xpctdALUctrl=ALUctrlFlag::ALU_UNDEF;xpctdALUout=-1;xpctdMEMctrl=MEMctrlFlag::MEM_UNDEF;xpctdMDR=-1;xpctdWBctrl=WBctrlFlag::WB_UNDEF;xpctdRd=-1;cpu->resetFlags();memory->resetLastDataMemAccess();
 
-void test01(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
-void test02(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
-void test03(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
-void test04(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
-void test05(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
-void test06(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname);
+void test01(BasicCPUTest* cpu, MemoryTest* memory, string fname);
+void test02(BasicCPUTest* cpu, MemoryTest* memory, string fname);
+void test03(BasicCPUTest* cpu, MemoryTest* memory, string fname);
+void test04(BasicCPUTest* cpu, MemoryTest* memory, string fname);
+void test05(BasicCPUTest* cpu, MemoryTest* memory, string fname);
+void test06(BasicCPUTest* cpu, MemoryTest* memory, string fname);
 void test(bool fpOp,
 			string instruction,
 			BasicCPUTest* cpu,
-			BasicMemoryTest* memory,
+			//~ BasicMemoryTest* memory,
+			MemoryTest* memory,
 			uint64_t startAddress,
 			uint64_t startSP,
 			uint32_t xpctdIR,
@@ -82,10 +85,9 @@ int main()
 #define TEST_FILE_02 "fpops.o"
 #define TEST_FILE_03 "isummation.o"
 #define TEST_FILE_04 "fpops.o"
-#define TEST_FILE_05 "isummation.o"
 
 	// create memory
-	BasicMemoryTest* memory = new BasicMemoryTest(MEMORY_SIZE);
+	MemoryTest* memory = new MemoryTest(Factory::createMemory());
 
 	// create CPU
 	BasicCPUTest *cpu = new BasicCPUTest(memory);
@@ -93,25 +95,28 @@ int main()
 	// Teste:
 	//	Como não temos todas as instruções implementadas, faremos apenas testes.
 	test01(cpu, memory, TEST_FILE_01);
-	//~ test02(cpu, memory, TEST_FILE_02);
-	//~ test03(cpu, memory, TEST_FILE_03);
-	//~ test04(cpu, memory, TEST_FILE_04);
-	test05(cpu, memory, TEST_FILE_05);
+	test02(cpu, memory, TEST_FILE_02);
+	test03(cpu, memory, TEST_FILE_03);
+	test04(cpu, memory, TEST_FILE_04);
 	
 	return 0;
 }
 
-void loadBinary (BasicMemoryTest* memory, string fname)
+void loadBinary (MemoryTest* memory, string fname)
 {
+
 	// load executable binary
-	memory->loadBinary(fname);
+	MemoryLoader loader{memory, fname};
+	//~ memory->loadBinary(fname);
+	
+	// relocate variable addresses
 	memory->relocateManual();
 	
 	// create human readable representation of the binary file
-	memory->writeBinaryAsText(fname);
+	loader.writeBinaryAsText(fname);
 
 	// create human readable representation of the binary file
-	memory->writeBinaryAsTextELF(fname);
+	loader.writeBinaryAsTextELF(fname);
 }
 
 #define TEST_HEADER bool fpOp;\
@@ -135,7 +140,7 @@ void loadBinary (BasicMemoryTest* memory, string fname)
  * Testa as instruções 'sub sp, sp, #16' e 'add w1, w1, w0' do
  * arquivo isummation.S.
  */
-void test01(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
+void test01(BasicCPUTest* cpu, MemoryTest* memory, string fname)
 {
 
 	TEST_HEADER
@@ -155,7 +160,6 @@ void test01(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
 	xpctdALUout = xpctdA - xpctdB;
 	
 	xpctdRd = xpctdALUout;
-	
 	
 	CALLTEST();
 	RESETTEST();
@@ -185,7 +189,7 @@ void test01(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
 /**
  * Testa as instruções fadd e fsub do arquivo fpops.S.
  */
-void test02(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
+void test02(BasicCPUTest* cpu, MemoryTest* memory, string fname)
 {
 	float fA = -0.7;
 	float fB = 0.5;
@@ -262,7 +266,7 @@ void test02(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
  * Testa as instruções de load e store e instruções de branch do
  * arquivo isummation.S.
  */
-void test03(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
+void test03(BasicCPUTest* cpu, MemoryTest* memory, string fname)
 {
 	TEST_HEADER
 	
@@ -540,7 +544,7 @@ void test03(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
 /**
  * Testa as instruções aritméticas de float de fpops.S.
  */
-void test04(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
+void test04(BasicCPUTest* cpu, MemoryTest* memory, string fname)
 {
 	TEST_HEADER
 	
@@ -616,58 +620,6 @@ void test04(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
 
 }
 
-/**
- * Testa apenas duas instruções de load e store do arquivo isummation.S.
- */
-void test05(BasicCPUTest* cpu, BasicMemoryTest* memory, string fname)
-{
-	TEST_HEADER
-	
-	int64_t signedAux;
-
-	//
-	// Test ldrsw x1, [sp, 12] (linha 38)
-	//
-	instruction = "ldrsw x1, [sp, 12]";
-	startAddress = 0x54; 	// endereço de 'ldrsw x1, [sp, 12]'
-	xpctdIR = 0xB9800FE1;
-	xpctdA = STARTSP; 		// SP deve ser lido para A
-	xpctdB = 12;			// valor imediato do offset
-	xpctdALUctrl = ALUctrlFlag::ADD;
-	xpctdMEMctrl = MEMctrlFlag::READ64;
-	xpctdWBctrl = WBctrlFlag::RegWrite;
-	
-	xpctdALUout = xpctdA + xpctdB;
-
-	// force data in memory
-	xpctdRd = STARTSP << 2;
-	memory->writeData64(xpctdALUout, STARTSP << 2);
-
-	CALLTEST();
-	RESETTEST();
-	
-	//
-	// Test str w0, [sp, 12] (linha 49)
-	//
-	instruction = "str w0, [sp, 12]";
-	startAddress = 0x80; 	// endereço da instrução
-	xpctdIR = 0xB9000FE0;
-	xpctdA = STARTSP;
-	xpctdB = 12;
-	cpu->setW(0,0x12345);		// valor arbitrário para w1
-	xpctdALUctrl = ALUctrlFlag::ADD;
-	xpctdMEMctrl = MEMctrlFlag::WRITE32;
-	xpctdWBctrl = WBctrlFlag::WB_NONE;
-
-	xpctdALUout = xpctdA + xpctdB;
-
-	// force arbitrary data in memory different from xpctdRd
-	xpctdRd = 0x12345;	
-	memory->writeData32(xpctdALUout, 0x54321);
-
-	CALLTEST();
-	RESETTEST();
-}
 
 /**
  * Testa o estágio IF.
@@ -838,7 +790,7 @@ void testEX(BasicCPUTest* cpu, bool fpOp, uint64_t xpctdALUout)
  * Testa o estágio MEM - NAO IMPLEMENTADO.
  */
 void testMEM(BasicCPUTest* cpu,
-				BasicMemoryTest* memory,
+				MemoryTest* memory,
 				MEMctrlFlag xpctdMEMctrl,
 				uint64_t xpctdALUout,
 				uint64_t xpctdRd)
@@ -861,27 +813,27 @@ void testMEM(BasicCPUTest* cpu,
 	// Test access type
 	//
 	
-	// map MEMctrlFlag to BasicMemoryTest::MemAccessType
-	BasicMemoryTest::MemAccessType xpctdLastDataMemAccess;
+	// map MEMctrlFlag to MemoryTest::MemAccessType
+	MemoryTest::MemAccessType xpctdLastDataMemAccess;
 	switch (xpctdMEMctrl) {
 		case MEMctrlFlag::MEM_NONE:
-			xpctdLastDataMemAccess = BasicMemoryTest::MemAccessType::MAT_NONE;
+			xpctdLastDataMemAccess = MemoryTest::MemAccessType::MAT_NONE;
 			break;
 		case MEMctrlFlag::READ32:
-			xpctdLastDataMemAccess = BasicMemoryTest::MemAccessType::MAT_READ32;
+			xpctdLastDataMemAccess = MemoryTest::MemAccessType::MAT_READ32;
 			break;
 		case MEMctrlFlag::READ64:
-			xpctdLastDataMemAccess = BasicMemoryTest::MemAccessType::MAT_READ64;
+			xpctdLastDataMemAccess = MemoryTest::MemAccessType::MAT_READ64;
 			break;
 		case MEMctrlFlag::WRITE32:
-			xpctdLastDataMemAccess = BasicMemoryTest::MemAccessType::MAT_WRITE32;
+			xpctdLastDataMemAccess = MemoryTest::MemAccessType::MAT_WRITE32;
 			break;
 		case MEMctrlFlag::WRITE64:
-			xpctdLastDataMemAccess = BasicMemoryTest::MemAccessType::MAT_WRITE64;
+			xpctdLastDataMemAccess = MemoryTest::MemAccessType::MAT_WRITE64;
 			break;
 	}
 
-	BasicMemoryTest::MemAccessType lastDataMemAccess =
+	MemoryTest::MemAccessType lastDataMemAccess =
 			memory->getLastDataMemAccess();
 	cout << "	Testing MEM access type..." << endl;
 	cout << "		Expected access type: "
@@ -999,7 +951,8 @@ void testWB(BasicCPUTest* cpu,
 void test(bool fpOp,
 			string instruction,
 			BasicCPUTest* cpu,
-			BasicMemoryTest* memory,
+			MemoryTest* memory,
+			//~ Corei7MemoryTest* memory,
 			uint64_t startAddress,
 			uint64_t startSP,
 			uint32_t xpctdIR,
